@@ -44,7 +44,7 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 import diffusers
-from diffusers import AutoencoderKL, DDPMScheduler, DiffusionPipeline, StableDiffusionPipeline, UNet2DConditionModel
+from diffusers import AutoencoderKL, DDPMScheduler, DiffusionPipeline, StableDiffusionPipeline, UNet2DConditionModel, StableDiffusionImg2ImgPipeline
 from diffusers.optimization import get_scheduler
 from diffusers.training_utils import cast_training_params, compute_snr
 from diffusers.utils import check_min_version, convert_state_dict_to_diffusers, is_wandb_available
@@ -343,9 +343,18 @@ def parse_args():
     parser.add_argument(
         "--checkpointing_steps",
         type=int,
-        default=500,
+        default=1000000000,
         help=(
             "Save a checkpoint of the training state every X updates. These checkpoints are only suitable for resuming"
+            " training using `--resume_from_checkpoint`."
+        ),
+    )
+    parser.add_argument(
+        "--checkpointing_epochs",
+        type=int,
+        default=5,
+        help=(
+            "Save a checkpoint of the training state every X epochs. These checkpoints are only suitable for resuming"
             " training using `--resume_from_checkpoint`."
         ),
     )
@@ -754,7 +763,23 @@ def main():
 
     with open(f"{args.train_data_dir.replace('train', 'val')}/metadata.jsonl") as f:
         val_metadata = [json.loads(line) for line in f]
-    val_idxs = [random.randint(0, len(val_metadata) - 1) for _ in range(8)]
+    val_idxs = [random.randint(0, len(val_metadata) - 1) for _ in range(args.num_validation_images)]
+    val_images = []
+    val_prompts = []
+    prompted_ages = []
+    real_ages = []
+    for ii, idx in enumerate(val_idxs):
+        image_path = os.path.join(args.train_data_dir.replace("train", "val"), val_metadata[idx]["file_name"])
+        image = Image.open(image_path).convert("RGB")
+        if ii < args.num_validation_images // 2:
+            age = val_metadata[idx]["age"]
+        else:
+            age = random.randint(0, 100)
+        prompt = age_to_caption(age)
+        val_images.append(image)
+        val_prompts.append(prompt)
+        prompted_ages.append(age)
+        real_ages.append(val_metadata[idx]["age"])
 
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
@@ -890,7 +915,7 @@ def main():
                     f" {args.validation_prompt}."
                 )
                 # create pipeline
-                pipeline = DiffusionPipeline.from_pretrained(
+                pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     unet=unwrap_model(unet),
                     revision=args.revision,
@@ -907,28 +932,15 @@ def main():
                 if args.seed is not None:
                     generator = generator.manual_seed(args.seed)
                 images = []
-                val_images = []
-                prompted_ages = []
-                real_ages = []
                 with torch.amp.autocast("cuda"):
                     for val_id in range(args.num_validation_images):
-                        if val_id % 2 == 0:
-                            age = val_metadata[val_idxs[val_id]]["age"]
-                        else:
-                            age = random.randint(0, 100)
-                        val_prompt = age_to_caption(age)
-                        val_img = Image.open(os.path.join(f"{args.train_data_dir.replace('train', 'val')}", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
-                        val_prompt = val_metadata[val_idxs[val_id]]["text"]
-                        prompted_ages.append(age)
-                        real_ages.append(val_metadata[val_idxs[val_id]]["age"])
-                        val_images.append(val_img)
                         images.append(
                             pipeline(
-                                val_prompt,
+                                val_prompts[val_id],
                                 num_inference_steps=30,
                                 generator=generator,
                                 negative_prompt="cartoon, anime, painting, blurry, low quality, deformed, ugly",
-                                image=val_img,
+                                image=val_images[val_id],
                                 strength=0.55,
                                 guidance_scale=7.5,
                             ).images[0]
@@ -954,6 +966,45 @@ def main():
 
                 del pipeline
                 torch.cuda.empty_cache()
+
+        if epoch % args.checkpointing_epochs == 0:
+            if accelerator.is_main_process:
+                # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
+                if args.checkpoints_total_limit is not None:
+                    checkpoints = os.listdir(args.output_dir)
+                    checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                    checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+
+                    # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
+                    if len(checkpoints) >= args.checkpoints_total_limit:
+                        num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
+                        removing_checkpoints = checkpoints[0:num_to_remove]
+
+                        logger.info(
+                            f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+                        )
+                        logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
+
+                        for removing_checkpoint in removing_checkpoints:
+                            removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
+                            shutil.rmtree(removing_checkpoint)
+
+                save_path = os.path.join(args.output_dir, f"checkpoint-{epoch}")
+                accelerator.save_state(save_path)
+
+                unwrapped_unet = unwrap_model(unet)
+                unet_lora_state_dict = convert_state_dict_to_diffusers(
+                    get_peft_model_state_dict(unwrapped_unet)
+                )
+
+                StableDiffusionPipeline.save_lora_weights(
+                    save_directory=save_path,
+                    unet_lora_layers=unet_lora_state_dict,
+                    safe_serialization=True,
+                )
+
+                logger.info(f"Saved state to {save_path}")
+
 
     # Save the lora layers
     accelerator.wait_for_everyone()
@@ -986,7 +1037,7 @@ def main():
         # Final inference
         # Load previous pipeline
         if args.validation_prompt is not None:
-            pipeline = DiffusionPipeline.from_pretrained(
+            pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 revision=args.revision,
                 variant=args.variant,
@@ -1004,28 +1055,15 @@ def main():
             if args.seed is not None:
                 generator = generator.manual_seed(args.seed)
             images = []
-            val_images = []
-            prompted_ages = []
-            real_ages = []
             with torch.amp.autocast("cuda"):
-                for val_id_ in range(args.num_validation_images):
-                    if val_id % 2 == 0:
-                        age = val_metadata[val_idxs[val_id]]["age"]
-                    else:
-                        age = random.randint(0, 100)
-                    val_prompt = age_to_caption(age)
-                    val_img = Image.open(os.path.join(f"{args.train_data_dir.replace('train', 'val')}", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
-                    val_prompt = val_metadata[val_idxs[val_id]]["text"]
-                    prompted_ages.append(age)
-                    real_ages.append(val_metadata[val_idxs[val_id]]["age"])
-                    val_images.append(val_img)
+                for val_id in range(args.num_validation_images):
                     images.append(
                         pipeline(
-                            val_prompt,
+                            val_prompts[val_id],
                             num_inference_steps=30,
                             generator=generator,
                             negative_prompt="cartoon, anime, painting, blurry, low quality, deformed, ugly",
-                            image=val_img,
+                            image=val_images[val_id],
                             strength=0.55,
                             guidance_scale=7.5,
                         ).images[0]

@@ -1,5 +1,5 @@
 import argparse
-import sys
+import os
 from pathlib import Path
 import torch
 from diffusers import StableDiffusionImg2ImgPipeline
@@ -26,9 +26,9 @@ def age_to_prompt(age: int) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Age progression inference")
-    parser.add_argument("--input_image",    type=str,   default="data/UTKFace_processed_test/val/images/10_0_0_20170110220111082.jpg.chip.jpg")
+    parser.add_argument("--input_image",    type=str,   default="")
     parser.add_argument("--target_ages",     type=str,   default="3,9,16,25,40,60,80")
-    parser.add_argument("--lora_weights",   type=str,   default="lora-full-run")
+    parser.add_argument("--lora_weights",   type=str,   default="")
     parser.add_argument("--base_model",     type=str,   default="stable-diffusion-v1-5/stable-diffusion-v1-5")
     parser.add_argument("--output_dir",     type=str,   default="inference-test-results")
     parser.add_argument("--strength",       type=float, default=0.55)
@@ -36,6 +36,17 @@ def main():
     parser.add_argument("--num_steps",      type=int,   default=30)
     parser.add_argument("--seed",           type=int,   default=42)
     args = parser.parse_args()
+
+    if args.input_image == "":
+        val_imgs = sorted(os.listdir("data/val/images"))
+        midpoint = len(val_imgs) // 2
+        args.input_image = f"data/val/images/{val_imgs[midpoint]}"
+
+    if args.lora_weights == "":
+        ckpt_dirs = sorted(os.listdir("train_output"))
+        ckpt_epochs = [int(cp.split("-")[1]) for cp in ckpt_dirs]
+        last = max(ckpt_epochs)
+        args.lora_weights = f"train_output/checkpoint-{last}"
 
     # flush=True ensures every print appears immediately, even if output is piped
     def log(msg): print(msg, flush=True)
