@@ -107,7 +107,9 @@ accelerate launch \
         --checkpoints_total_limit=3 \
         --output_dir="$LORA_OUT" \
         --seed=42 \
-        --report_to="tensorboard"
+        --report_to="wandb" \
+        --validation_prompt="a portrait photo of a DESC, aged AGE, realistic, high quality" \
+        --num_validation_images=8
 
 echo "LoRA weights saved to: $LORA_OUT"
 

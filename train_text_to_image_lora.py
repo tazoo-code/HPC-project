@@ -752,7 +752,7 @@ def main():
         disable=not accelerator.is_local_main_process,
     )
 
-    with open("./data/val/metadata.jsonl") as f:
+    with open(f"{args.train_data_dir.replace('train', 'val')}/metadata.jsonl") as f:
         val_metadata = [json.loads(line) for line in f]
     val_idxs = [random.randint(0, len(val_metadata) - 1) for _ in range(8)]
 
@@ -917,8 +917,8 @@ def main():
                         else:
                             age = random.randint(0, 100)
                         val_prompt = age_to_caption(age)
-                        val_img = Image.open(os.path.join("./data/val", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
-                        val_prompt = val_metadata[val_idxs[val_id]]["prompt"]
+                        val_img = Image.open(os.path.join(f"{args.train_data_dir.replace('train', 'val')}", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
+                        val_prompt = val_metadata[val_idxs[val_id]]["text"]
                         prompted_ages.append(age)
                         real_ages.append(val_metadata[val_idxs[val_id]]["age"])
                         val_images.append(val_img)
@@ -1012,8 +1012,8 @@ def main():
                     else:
                         age = random.randint(0, 100)
                     val_prompt = age_to_caption(age)
-                    val_img = Image.open(os.path.join("./data/val", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
-                    val_prompt = val_metadata[val_idxs[val_id]]["prompt"]
+                    val_img = Image.open(os.path.join(f"{args.train_data_dir.replace('train', 'val')}", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
+                    val_prompt = val_metadata[val_idxs[val_id]]["text"]
                     prompted_ages.append(age)
                     real_ages.append(val_metadata[val_idxs[val_id]]["age"])
                     val_images.append(val_img)
