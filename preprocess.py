@@ -1,32 +1,3 @@
-"""
-preprocess.py
--------------
-Preprocessing script for UTKFace dataset.
-
-What it does:
-  1. Reads all .jpg images from the UTKFace directory
-  2. Parses age from the filename format: [age]_[gender]_[race]_[datetime].jpg
-  3. Filters out malformed filenames and extreme ages (>= 100)
-  4. Resizes images to 512x512 (SD 1.5 native resolution)
-  5. Generates a metadata.jsonl file with text captions
-  6. Splits into train/val sets
-
-Output structure:
-  output_dir/
-    train/
-      images/       <- resized .jpg files
-      metadata.jsonl
-    val/
-      images/
-      metadata.jsonl
-
-Usage (local):
-    python scripts/preprocess.py --data_dir /path/to/UTKFace --output_dir /path/to/processed
-
-Usage (Slurm, inside Singularity):
-    See slurm/01_preprocess.sh
-"""
-
 import os
 import json
 import argparse
@@ -35,8 +6,6 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-
-# ── Caption generation ────────────────────────────────────────────────────────
 
 def age_to_caption(age: int) -> str:
     """Convert an integer age to a natural language text caption."""
@@ -58,8 +27,6 @@ def age_to_caption(age: int) -> str:
     return f"a portrait photo of {desc}, aged {age}, realistic, high quality"
 
 
-# ── Filename parsing ──────────────────────────────────────────────────────────
-
 def parse_filename(filename: str):
     """
     Parse UTKFace filename: [age]_[gender]_[race]_[datetime].jpg
@@ -76,12 +43,10 @@ def parse_filename(filename: str):
         return None
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
     parser = argparse.ArgumentParser(description="Preprocess UTKFace for SD LoRA fine-tuning")
-    parser.add_argument("--data_dir",   type=str, required=True, help="Path to UTKFace raw images")
-    parser.add_argument("--output_dir", type=str, required=True, help="Output directory")
+    parser.add_argument("--data_dir",   type=str, default="dataset/UTKFace", help="Path to UTKFace raw images")
+    parser.add_argument("--output_dir", type=str, default="data/UTKFace_processed", help="Output directory")
     parser.add_argument("--image_size", type=int, default=512,   help="Target image size (default: 512)")
     parser.add_argument("--val_split",  type=float, default=0.05, help="Fraction for validation (default: 0.05)")
     parser.add_argument("--max_age",    type=int, default=99,    help="Discard images with age >= this (default: 99)")
@@ -151,7 +116,6 @@ def main():
                 }) + "\n")
 
     print(f"\nDone! Processed data written to: {output_dir}")
-    print("Next step: run slurm/02_train.sh")
 
 
 if __name__ == "__main__":

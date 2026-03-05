@@ -942,11 +942,11 @@ def main():
                         tracker.log(
                             {
                                 "validation": [
-                                    wandb.Image(image, caption=f"{i}: {prompted_ages[i]}")
+                                    wandb.Image(image, caption=f"age: {prompted_ages[i]}")
                                     for i, image in enumerate(images)
                                 ],
                                 "validation_orig": [
-                                    wandb.Image(val_img, caption=f"{i}: {real_ages[i]}")
+                                    wandb.Image(val_img, caption=f"age: {real_ages[i]}")
                                     for i, val_img in enumerate(val_images)
                                 ]
                             }
@@ -1040,11 +1040,11 @@ def main():
                         tracker.log(
                             {
                                 "test": [
-                                    wandb.Image(image, caption=f"{i}: {prompted_ages[i]}")
+                                    wandb.Image(image, caption=f"age: {prompted_ages[i]}")
                                     for i, image in enumerate(images)
                                 ],
                                 "test_orig": [
-                                    wandb.Image(val_img, caption=f"{i}: {real_ages[i]}")
+                                    wandb.Image(val_img, caption=f"age: {real_ages[i]}")
                                     for i, val_img in enumerate(val_images)
                                 ]
                             }

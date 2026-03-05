@@ -133,7 +133,7 @@ for AGE in 10 25 40 60 80; do
     echo "  -> Generating age $AGE..."
     python "$INFERENCE_SCRIPT" \
         --input_image  "$TEST_IMAGE" \
-        --target_age   "$AGE" \
+        --target_ages   "$AGE" \
         --lora_weights "$LORA_OUT" \
         --output_dir   "$INFERENCE_OUT" \
         --strength     0.55 \
