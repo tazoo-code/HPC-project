@@ -207,7 +207,9 @@ marimo/_lsp/
 __marimo__/
 
 
-lora-full-run
-data
-wandb
-logs
+data/
+dataset/
+train_output/
+inference-test-results/
+wandb/
+logs/
