@@ -991,6 +991,8 @@ def main():
                 revision=args.revision,
                 variant=args.variant,
                 torch_dtype=weight_dtype,
+                safety_checker=None,
+                requires_safety_checker=False,
             )
             pipeline = pipeline.to(accelerator.device)
 
@@ -1041,7 +1043,7 @@ def main():
                                     wandb.Image(image, caption=f"{i}: {prompted_ages[i]}")
                                     for i, image in enumerate(images)
                                 ],
-                                "validation_orig": [
+                                "test_orig": [
                                     wandb.Image(val_img, caption=f"{i}: {real_ages[i]}")
                                     for i, val_img in enumerate(val_images)
                                 ]
