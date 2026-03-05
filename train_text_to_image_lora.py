@@ -22,9 +22,11 @@ import os
 import random
 import shutil
 from pathlib import Path
+import json
 
 import datasets
 import numpy as np
+from PIL import Image
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
@@ -390,6 +392,26 @@ DATASET_NAME_MAPPING = {
 }
 
 
+def age_to_caption(age: int) -> str:
+    """Convert an integer age to a natural language text caption."""
+    if age <= 2:
+        desc = "a toddler"
+    elif age <= 12:
+        desc = "a child"
+    elif age <= 19:
+        desc = "a teenager"
+    elif age <= 35:
+        desc = "a young adult"
+    elif age <= 55:
+        desc = "a middle-aged person"
+    elif age <= 70:
+        desc = "an older adult"
+    else:
+        desc = "an elderly person"
+
+    return f"a portrait photo of {desc}, aged {age}, realistic, high quality"
+
+
 def main():
     args = parse_args()
     if args.report_to == "wandb" and args.hub_token is not None:
@@ -432,6 +454,7 @@ def main():
     # If passed along, set the training seed now.
     if args.seed is not None:
         set_seed(args.seed)
+        random.seed(args.seed)
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -729,6 +752,10 @@ def main():
         disable=not accelerator.is_local_main_process,
     )
 
+    with open("./data/val/metadata.jsonl") as f:
+        val_metadata = [json.loads(line) for line in f]
+    val_idxs = [random.randint(0, len(val_metadata) - 1) for _ in range(8)]
+
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         train_loss = 0.0
@@ -869,6 +896,8 @@ def main():
                     revision=args.revision,
                     variant=args.variant,
                     torch_dtype=weight_dtype,
+                    safety_checker=None,
+                    requires_safety_checker=False,
                 )
                 pipeline = pipeline.to(accelerator.device)
                 pipeline.set_progress_bar_config(disable=True)
@@ -878,10 +907,31 @@ def main():
                 if args.seed is not None:
                     generator = generator.manual_seed(args.seed)
                 images = []
-                with torch.cuda.amp.autocast():
-                    for _ in range(args.num_validation_images):
+                val_images = []
+                prompted_ages = []
+                real_ages = []
+                with torch.amp.autocast("cuda"):
+                    for val_id in range(args.num_validation_images):
+                        if val_id % 2 == 0:
+                            age = val_metadata[val_idxs[val_id]]["age"]
+                        else:
+                            age = random.randint(0, 100)
+                        val_prompt = age_to_caption(age)
+                        val_img = Image.open(os.path.join("./data/val", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
+                        val_prompt = val_metadata[val_idxs[val_id]]["prompt"]
+                        prompted_ages.append(age)
+                        real_ages.append(val_metadata[val_idxs[val_id]]["age"])
+                        val_images.append(val_img)
                         images.append(
-                            pipeline(args.validation_prompt, num_inference_steps=30, generator=generator).images[0]
+                            pipeline(
+                                val_prompt,
+                                num_inference_steps=30,
+                                generator=generator,
+                                negative_prompt="cartoon, anime, painting, blurry, low quality, deformed, ugly",
+                                image=val_img,
+                                strength=0.55,
+                                guidance_scale=7.5,
+                            ).images[0]
                         )
 
                 for tracker in accelerator.trackers:
@@ -892,8 +942,12 @@ def main():
                         tracker.log(
                             {
                                 "validation": [
-                                    wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
+                                    wandb.Image(image, caption=f"{i}: {prompted_ages[i]}")
                                     for i, image in enumerate(images)
+                                ],
+                                "validation_orig": [
+                                    wandb.Image(val_img, caption=f"{i}: {real_ages[i]}")
+                                    for i, val_img in enumerate(val_images)
                                 ]
                             }
                         )
@@ -948,10 +1002,31 @@ def main():
             if args.seed is not None:
                 generator = generator.manual_seed(args.seed)
             images = []
-            with torch.cuda.amp.autocast():
-                for _ in range(args.num_validation_images):
+            val_images = []
+            prompted_ages = []
+            real_ages = []
+            with torch.amp.autocast("cuda"):
+                for val_id_ in range(args.num_validation_images):
+                    if val_id % 2 == 0:
+                        age = val_metadata[val_idxs[val_id]]["age"]
+                    else:
+                        age = random.randint(0, 100)
+                    val_prompt = age_to_caption(age)
+                    val_img = Image.open(os.path.join("./data/val", val_metadata[val_idxs[val_id]]["file_name"])).convert("RGB")
+                    val_prompt = val_metadata[val_idxs[val_id]]["prompt"]
+                    prompted_ages.append(age)
+                    real_ages.append(val_metadata[val_idxs[val_id]]["age"])
+                    val_images.append(val_img)
                     images.append(
-                        pipeline(args.validation_prompt, num_inference_steps=30, generator=generator).images[0]
+                        pipeline(
+                            val_prompt,
+                            num_inference_steps=30,
+                            generator=generator,
+                            negative_prompt="cartoon, anime, painting, blurry, low quality, deformed, ugly",
+                            image=val_img,
+                            strength=0.55,
+                            guidance_scale=7.5,
+                        ).images[0]
                     )
 
             for tracker in accelerator.trackers:
@@ -963,8 +1038,12 @@ def main():
                         tracker.log(
                             {
                                 "test": [
-                                    wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
+                                    wandb.Image(image, caption=f"{i}: {prompted_ages[i]}")
                                     for i, image in enumerate(images)
+                                ],
+                                "validation_orig": [
+                                    wandb.Image(val_img, caption=f"{i}: {real_ages[i]}")
+                                    for i, val_img in enumerate(val_images)
                                 ]
                             }
                         )
