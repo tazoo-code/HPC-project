@@ -213,3 +213,4 @@ train_output/
 inference-test-results/
 wandb/
 logs/
+*.sif
