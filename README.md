@@ -11,7 +11,7 @@ pip install -r pip_reqs.txt
 
 #### Singularity container
 ```
-sudo singularity build singularity.sif singularity.def
+sudo singularity build hpc-singularity.sif hpc-singularity.def
 ```
 
 ### Preprocessing
