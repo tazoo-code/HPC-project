@@ -2,22 +2,27 @@ Bootstrap: docker
 From: nvidia/cuda:13.0.1-cudnn-devel-ubuntu22.04
 
 %environment
+    # env variables for python installation
     export LANG=C.UTF-8
     export LC_ALL=C.UTF-8
     export PYTHONUNBUFFERED=1
     export PATH=/opt/python/bin:$PATH
+    # fixed env variables for cuda compatibility
     export PIP_NVIDIA=/opt/python/lib/python3.10/site-packages/nvidia
     export LD_LIBRARY_PATH=${PIP_NVIDIA}/cu13/lib:${PIP_NVIDIA}/cublas/lib:${PIP_NVIDIA}/cudnn/lib:${PIP_NVIDIA}/cufft/lib:${PIP_NVIDIA}/curand/lib:${PIP_NVIDIA}/cusolver/lib:${PIP_NVIDIA}/cusparse/lib:${PIP_NVIDIA}/nccl/lib:${PIP_NVIDIA}/nvtx/lib:${PIP_NVIDIA}/cuda_runtime/lib:${PIP_NVIDIA}/cuda_cupti/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
 %post
+    # avoid interactive prompts
     export DEBIAN_FRONTEND=noninteractive
 
+    # update packages
     apt-get update && apt-get install -y --no-install-recommends \
         tzdata wget curl git build-essential libssl-dev \
         zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
         libffi-dev liblzma-dev libncurses5-dev libncursesw5-dev \
         xz-utils tk-dev ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+    # download and compile python from binary
     PYTHON_VERSION=3.10.19
     wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz -O /tmp/Python-${PYTHON_VERSION}.tgz
     tar -xzf /tmp/Python-${PYTHON_VERSION}.tgz -C /tmp
@@ -27,11 +32,14 @@ From: nvidia/cuda:13.0.1-cudnn-devel-ubuntu22.04
     make install
     cd / && rm -rf /tmp/Python-${PYTHON_VERSION} /tmp/Python-${PYTHON_VERSION}.tgz
 
+    # update pip 
     /opt/python/bin/python3 -m pip install --upgrade "pip==26.0.1" "setuptools==80.10.2" wheel
 
+    # install pip requirements
     /opt/python/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 -r /opt/pip_reqs.txt
     /opt/python/bin/pip cache purge
 
+    # add python shortcut
     ln -sf /opt/python/bin/python3 /usr/local/bin/python3
     ln -sf /opt/python/bin/python3 /usr/local/bin/python
     ln -sf /opt/python/bin/pip3 /usr/local/bin/pip3
