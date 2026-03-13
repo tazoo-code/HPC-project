@@ -6,6 +6,7 @@ rank=${3:-8}  # LoRA rank
 learning_rate=${4:-1e-4}  # learning rate
 seed=${5:-"42"}  # random seed
 output_dir=${6:-"train_output"}  # where to save the trained model and checkpoints
+mkdir -p "${output_dir}"
 
 num_gpus=$(nvidia-smi -L | wc -l)
 

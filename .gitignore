@@ -209,7 +209,10 @@ __marimo__/
 
 data/
 dataset/
-train_output/
+train_output*/
+inference_output*/
+slurm_errors/
+slurm_outputs/
 inference-test-results/
 wandb/
 logs/
