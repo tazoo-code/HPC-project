@@ -35,6 +35,7 @@ def main():
     parser.add_argument("--guidance_scale", type=float, default=7.5)
     parser.add_argument("--num_steps",      type=int,   default=30)
     parser.add_argument("--seed",           type=int,   default=42)
+    parser.add_argument("--train_output_dir",     type=str,   default="train_output")
     args = parser.parse_args()
 
     if args.input_image == "":
@@ -43,10 +44,10 @@ def main():
         args.input_image = f"data/val/images/{val_imgs[midpoint]}"
 
     if args.lora_weights == "":
-        ckpt_dirs = sorted(os.listdir("train_output"))
+        ckpt_dirs = sorted(os.listdir(args.train_output_dir))
         ckpt_epochs = [int(cp.split("-")[1]) for cp in ckpt_dirs]
         last = max(ckpt_epochs)
-        args.lora_weights = f"train_output/checkpoint-{last}"
+        args.lora_weights = f"{args.train_output_dir}/checkpoint-{last}"
 
     # flush=True ensures every print appears immediately, even if output is piped
     def log(msg): print(msg, flush=True)

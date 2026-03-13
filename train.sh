@@ -5,6 +5,7 @@ batch_size=${2:-16}  # per-GPU batch size (adjust based on your GPU memory)
 rank=${3:-8}  # LoRA rank
 learning_rate=${4:-1e-4}  # learning rate
 seed=${5:-"42"}  # random seed
+output_dir=${6:-"train_output"}  # where to save the trained model and checkpoints
 
 num_gpus=$(nvidia-smi -L | wc -l)
 
@@ -35,7 +36,7 @@ accelerate launch \
         --validation_prompt="a portrait photo of a DESC, aged AGE, realistic, high quality" \
         --num_validation_images=8 \
         --checkpointing_epochs=10 \
-        --output_dir="train_output" \
+        --output_dir="${output_dir}" \
         --report_to="wandb" \
         --mixed_precision="fp16" \
         --use_8bit_adam \
