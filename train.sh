@@ -25,7 +25,7 @@ accelerate launch \
         --resolution=512 \
         --center_crop \
         --random_flip \
-        --num_train_epochs=50 \
+        --num_train_epochs=20 \
         --train_batch_size=$batch_size \
         --gradient_accumulation_steps=$((16 / $batch_size)) \
         --learning_rate="${learning_rate}" \
